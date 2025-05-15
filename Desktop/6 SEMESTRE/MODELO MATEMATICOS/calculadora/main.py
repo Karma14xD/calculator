@@ -1,18 +1,15 @@
-import sys
-import math
+import sys,math,random,re,os
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QStackedWidget,
     QToolButton, QGridLayout, QMessageBox, QSpacerItem, QSizePolicy,
-    QHBoxLayout, QSpinBox, QPushButton, QLineEdit, QFrame,QFormLayout,QComboBox,QTableWidget,QTableWidgetItem,QScrollArea
+    QHBoxLayout, QSpinBox, QPushButton, QLineEdit, QFrame,QFormLayout,QComboBox,QTableWidget,QTableWidgetItem,QScrollArea,QHeaderView,QGroupBox
 )
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
-import re
 import numpy as np
 from sympy import Matrix,sympify,simplify,symbols,diff,integrate,lambdify
-import os
 
 def obtener_ruta_recurso(rel_path):
     """Devuelve la ruta absoluta al recurso, compatible con PyInstaller."""
@@ -3610,15 +3607,23 @@ class VistaVectoresPropios(QWidget):
         self.volver_callback = volver_callback
         self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
 
-        layout = QVBoxLayout(self)
+        # === SCROLL AREA ===
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none;")
 
-        # Título
-        titulo = QLabel("\U0001F522 Valores y vectores Propios")
+        # === CONTENEDOR PRINCIPAL CON TODO EL CONTENIDO ===
+        contenedor = QWidget()
+        contenedor_layout = QVBoxLayout(contenedor)
+        contenedor_layout.setContentsMargins(20, 20, 20, 20)
+
+        # === TÍTULO ===
+        titulo = QLabel("🔢 Valores y Vectores Propios")
         titulo.setAlignment(Qt.AlignCenter)
         titulo.setStyleSheet("font-size: 26px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
-        layout.addWidget(titulo)
+        contenedor_layout.addWidget(titulo)
 
-        # Selector de tamaño de matriz
+        # === SELECTORES DE MATRIZ ===
         seleccion_layout = QHBoxLayout()
         seleccion_layout.setSpacing(15)
         estilo_spin = "QSpinBox { background-color: white; padding: 4px; font-size: 14px; border-radius: 4px; }"
@@ -3647,13 +3652,13 @@ class VistaVectoresPropios(QWidget):
         """)
         btn_generar.clicked.connect(self.generar_entradas)
         seleccion_layout.addWidget(btn_generar)
-        layout.addLayout(seleccion_layout)
+        contenedor_layout.addLayout(seleccion_layout)
 
-        # Contenedor de entradas
+        # === ENTRADAS MATRIZ ===
         self.grid_entradas = QGridLayout()
-        layout.addLayout(self.grid_entradas)
+        contenedor_layout.addLayout(self.grid_entradas)
 
-        # Botón calcular
+        # === BOTÓN CALCULAR ===
         self.btn_calcular = QPushButton("Calcular")
         self.btn_calcular.setStyleSheet("""
             QPushButton {
@@ -3665,15 +3670,15 @@ class VistaVectoresPropios(QWidget):
             }
         """)
         self.btn_calcular.clicked.connect(self.calcular_vectores)
-        layout.addWidget(self.btn_calcular, alignment=Qt.AlignCenter)
+        contenedor_layout.addWidget(self.btn_calcular, alignment=Qt.AlignCenter)
 
-        # Resultados
+        # === RESULTADOS ===
         self.resultado_texto = QLabel()
         self.resultado_texto.setStyleSheet("font-size: 14px; color: #2c3e50; margin: 10px;")
         self.resultado_texto.setWordWrap(True)
-        layout.addWidget(self.resultado_texto)
+        contenedor_layout.addWidget(self.resultado_texto)
 
-        # Botones de gráficas
+        # === BOTONES DE GRÁFICAS ===
         graficas_layout = QHBoxLayout()
         self.btn_grafica_2d = QPushButton("Mostrar Gráfica 2D")
         self.btn_grafica_3d = QPushButton("Mostrar Gráfica 3D")
@@ -3692,13 +3697,15 @@ class VistaVectoresPropios(QWidget):
         self.btn_grafica_3d.clicked.connect(self.graficar_3d)
         graficas_layout.addWidget(self.btn_grafica_2d)
         graficas_layout.addWidget(self.btn_grafica_3d)
-        layout.addLayout(graficas_layout)
+        contenedor_layout.addLayout(graficas_layout)
 
-        # Canvas
-        self.canvas = FigureCanvas(plt.Figure(figsize=(4, 3)))
-        layout.addWidget(self.canvas)
+        # === CANVAS DE GRÁFICA ===
+        self.canvas = FigureCanvas(plt.Figure(figsize=(10, 8)))
+        self.canvas.setMinimumHeight(400)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        contenedor_layout.addWidget(self.canvas)
 
-        # Botón volver
+        # === BOTÓN VOLVER ===
         btn_volver = QPushButton("Volver")
         btn_volver.setStyleSheet("""
             QPushButton {
@@ -3710,11 +3717,19 @@ class VistaVectoresPropios(QWidget):
             }
         """)
         btn_volver.clicked.connect(self.volver_callback)
-        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+        contenedor_layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        # === AGREGA TODO AL SCROLL AREA ===
+        scroll.setWidget(contenedor)
+
+        # === LAYOUT FINAL DEL WIDGET PRINCIPAL ===
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(scroll)
 
         self.entradas = []
         self.matriz_actual = None
         self.vectores_actuales = None
+
 
     def generar_entradas(self):
         for fila in self.entradas:
@@ -3801,6 +3816,1786 @@ class VistaVectoresPropios(QWidget):
         ax.set_zlabel('Z')
         self.canvas.draw()
 
+# ------------------------- SUBMENU DE GENERACION DE NUMEROS -------------------------
+class SubmenuGeneracionNumeros(SubmenuBase):
+    def __init__(self, stack, menu_widget, callbacks):
+        super().__init__(stack, menu_widget)
+        self.callbacks = callbacks  # Diccionario con métodos por nombre
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+
+        title = QLabel("Generación de \nNúmeros")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(20)
+        grid.setAlignment(Qt.AlignCenter)
+
+        metodos = [
+            ("Mersenne Twister", "derivada.png"),
+            ("Xorshift", "integral.png"),
+            ("PCG", "magnitud.png"),
+            ("WELL", "matrices.png"),
+            ("Congruencial Mixto", "resta.png"),
+            ("Congruencial Multiplicativo", "punto.png"),
+            ("Tausworthe LFSR", "graficas.png"),
+            ("Producto Medio", "vectores.png"),
+            ("Cuadrado Medio", "superficie3d.png"),
+        ]
+
+        for idx, (nombre, icono_archivo) in enumerate(metodos):
+            btn = QToolButton()
+            btn.setText(nombre)
+            btn.setIcon(QIcon(obtener_ruta_recurso(os.path.join("imagenes", icono_archivo))))
+            btn.setIconSize(QSize(40, 40))
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setStyleSheet("""
+                QToolButton {
+                    background-color: #2c3e50;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                    border-radius: 10px;
+                    padding: 15px;
+                }
+                QToolButton:hover {
+                    background-color: #34495e;
+                }
+            """)
+
+            if nombre in self.callbacks:
+                btn.clicked.connect(self.callbacks[nombre])
+            else:
+                btn.clicked.connect(lambda _, x=nombre: QMessageBox.information(self, "Generación de Números", f"Método '{x}' aún no implementado"))
+
+            grid.addWidget(btn, idx // 3, idx % 3)
+
+        layout.addLayout(grid)
+        layout.addSpacing(1)
+        self.add_back_button(layout)
+
+# ------------------------- VISTA CONGRUENCIAL MIXTO -------------------------
+class VistaCongruencialMixto(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        # Scroll general para todo el módulo
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+
+        contenedor = QWidget()
+        layout_contenedor = QVBoxLayout(contenedor)
+        layout_contenedor.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método Congruencial Mixto")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout_contenedor.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_semilla = QLineEdit()
+        self.input_a = QLineEdit()
+        self.input_c = QLineEdit()
+        self.input_m = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_semilla, self.input_a, self.input_c, self.input_m, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (X₀):", self.input_semilla)
+        form.addRow("Multiplicador (a):", self.input_a)
+        form.addRow("Constante (c):", self.input_c)
+        form.addRow("Módulo (m):", self.input_m)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout_contenedor.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar Números")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout_contenedor.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(4)
+        self.tabla.setHorizontalHeaderLabels(["n", "Xₙ", "a·Xₙ + c", "Xₙ₊₁"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout_contenedor.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        layout_contenedor.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout_contenedor.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        # Scroll
+        scroll_area.setWidget(contenedor)
+        layout_principal = QVBoxLayout(self)
+        layout_principal.addWidget(scroll_area)
+
+    def calcular(self):
+        try:
+            x = int(self.input_semilla.text())
+            a = int(self.input_a.text())
+            c = int(self.input_c.text())
+            m = int(self.input_m.text())
+            n = int(self.input_n.text())
+
+            if m <= 0 or n <= 0:
+                raise ValueError("m y n deben ser mayores a 0")
+
+            resultados = []
+            for i in range(n):
+                intermedio = a * x + c
+                siguiente = intermedio % m
+                resultados.append((i, x, f"{a}×{x} + {c} = {intermedio}", siguiente))
+                x = siguiente
+
+            # Configura la tabla con 4 columnas
+            self.tabla.setColumnCount(4)
+            self.tabla.setHorizontalHeaderLabels(["n", "Xₙ", "a·Xₙ + c", "Xₙ₊₁"])
+            self.tabla.setRowCount(len(resultados))
+
+            for i, (indice, actual, formula, siguiente) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(indice)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(str(actual)))
+                self.tabla.setItem(i, 2, QTableWidgetItem(formula))
+                self.tabla.setItem(i, 3, QTableWidgetItem(str(siguiente)))
+
+            # Gráfica
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            valores = [item[3] for item in resultados]
+            ax.plot(range(n), valores, marker='o', color='#3498db')
+            ax.set_title("Secuencia Congruencial Mixto")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except ValueError:
+            QMessageBox.warning(self, "Entrada inválida", "Por favor, ingresa solo valores enteros positivos.")
+
+# ------------------------- VISTA XORSHIT -------------------------
+class VistaXorshift(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        # Scroll general
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método XORSHIFT")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_x = QLineEdit()
+        self.input_a = QLineEdit()
+        self.input_b = QLineEdit()
+        self.input_c = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_x, self.input_a, self.input_b, self.input_c, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla inicial (x):", self.input_x)
+        form.addRow("Constante a:", self.input_a)
+        form.addRow("Constante b:", self.input_b)
+        form.addRow("Constante c:", self.input_c)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(5)
+        self.tabla.setHorizontalHeaderLabels([
+            "n", "Xₙ original", "⊕ (X << a)", "⊕ (>> b)", "⊕ (<< c) = Xₙ final"
+        ])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            x = int(self.input_x.text())
+            a = int(self.input_a.text())
+            b = int(self.input_b.text())
+            c = int(self.input_c.text())
+            n = int(self.input_n.text())
+
+            if x <= 0 or n <= 0:
+                raise ValueError("x y n deben ser positivos")
+
+            resultados = []
+
+            for i in range(n):
+                original = x
+                paso1 = original ^ ((original << a) & 0xFFFFFFFF)
+                paso2 = paso1 ^ ((paso1 >> b) & 0xFFFFFFFF)
+                final = paso2 ^ ((paso2 << c) & 0xFFFFFFFF)
+                resultados.append((i, original, paso1, paso2, final))
+                x = final
+
+            # Tabla actualizada
+            self.tabla.setRowCount(len(resultados))
+            self.tabla.setColumnCount(5)
+            self.tabla.setHorizontalHeaderLabels([
+                "n", "Xₙ original", "⊕ (X << a)", "⊕ (>> b)", "⊕ (<< c) = Xₙ final"
+            ])
+
+            for i, (idx, x0, x1, x2, xf) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(idx)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(str(x0)))
+                self.tabla.setItem(i, 2, QTableWidgetItem(str(x1)))
+                self.tabla.setItem(i, 3, QTableWidgetItem(str(x2)))
+                self.tabla.setItem(i, 4, QTableWidgetItem(str(xf)))
+
+            # Gráfica
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            valores = [xf for _, _, _, _, xf in resultados]
+            ax.plot(range(n), valores, marker='o', color='#9b59b6')
+            ax.set_title("Secuencia XORSHIFT")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except ValueError:
+            QMessageBox.warning(self, "Entrada inválida", "Por favor, ingresa solo valores enteros válidos.")
+
+# ------------------------- VISTA CONGRUENCIAL MULTIPLICATIVO -------------------------
+class VistaCongruencialMultiplicativo(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+
+        contenedor = QWidget()
+        layout_contenedor = QVBoxLayout(contenedor)
+        layout_contenedor.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método Congruencial Multiplicativo")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout_contenedor.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_semilla = QLineEdit()
+        self.input_a = QLineEdit()
+        self.input_m = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_semilla, self.input_a, self.input_m, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (X₀):", self.input_semilla)
+        form.addRow("Multiplicador (a):", self.input_a)
+        form.addRow("Módulo (m):", self.input_m)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout_contenedor.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar Números")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout_contenedor.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(3)
+        self.tabla.setHorizontalHeaderLabels(["n", "Xₙ", "a·Xₙ mod m"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout_contenedor.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        layout_contenedor.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout_contenedor.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll_area.setWidget(contenedor)
+        layout_principal = QVBoxLayout(self)
+        layout_principal.addWidget(scroll_area)
+
+    def calcular(self):
+        try:
+            x = int(self.input_semilla.text())
+            a = int(self.input_a.text())
+            m = int(self.input_m.text())
+            n = int(self.input_n.text())
+
+            if m <= 0 or n <= 0 or a <= 0 or x <= 0:
+                raise ValueError("Todos los valores deben ser enteros positivos.")
+
+            resultados = []
+
+            for i in range(n):
+                resultado = (a * x) % m
+                resultados.append((i, x, f"{a}×{x} % {m} = {resultado}"))
+                x = resultado
+
+            self.tabla.setColumnCount(3)
+            self.tabla.setHorizontalHeaderLabels(["n", "Xₙ", "a·Xₙ mod m"])
+            self.tabla.setRowCount(len(resultados))
+
+            for i, (idx, val, operacion) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(idx)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(str(val)))
+                self.tabla.setItem(i, 2, QTableWidgetItem(operacion))
+
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            valores = [int(val[1]) for val in resultados]
+            ax.plot(range(n), valores, marker='o', color='#8e44ad')
+            ax.set_title("Secuencia Congruencial Multiplicativo")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except ValueError:
+            QMessageBox.warning(self, "Entrada inválida", "Por favor, ingresa solo valores enteros positivos.")
+
+# ------------------------- VISTA PRODUCTO MEDIO -------------------------
+class VistaProductoMedio(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método de Producto Medio")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_x0 = QLineEdit()
+        self.input_x1 = QLineEdit()
+        self.input_digitos = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_x0, self.input_x1, self.input_digitos, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla 1 (X₀):", self.input_x0)
+        form.addRow("Semilla 2 (X₁):", self.input_x1)
+        form.addRow("Dígitos centrales:", self.input_digitos)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(6)
+        self.tabla.setHorizontalHeaderLabels(["n", "Xₙ₋₂", "Xₙ₋₁", "Producto", "Centrales", "Xₙ"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            x0 = int(self.input_x0.text())
+            x1 = int(self.input_x1.text())
+            d = int(self.input_digitos.text())
+            n = int(self.input_n.text())
+
+            if any(val <= 0 for val in [x0, x1, d, n]):
+                raise ValueError("Todos los valores deben ser positivos.")
+
+            def obtener_medios(valor, digitos):
+                val_str = str(valor).zfill(digitos * 2)
+                start = (len(val_str) - digitos) // 2
+                return val_str[start:start + digitos]
+
+            resultados = [(0, None, None, None, None, x0), (1, x0, None, None, None, x1)]
+
+            for i in range(2, n):
+                xnm2 = resultados[i - 2][5]
+                xnm1 = resultados[i - 1][5]
+                producto = xnm2 * xnm1
+                centrales = obtener_medios(producto, d)
+                xn = int(centrales)
+                resultados.append((i, xnm2, xnm1, producto, centrales, xn))
+
+            # Actualizar tabla
+            self.tabla.setRowCount(len(resultados))
+            for fila in resultados:
+                for col, val in enumerate(fila):
+                    item = QTableWidgetItem("" if val is None else str(val))
+                    self.tabla.setItem(fila[0], col, item)
+
+            # Graficar
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            valores = [fila[5] for fila in resultados if fila[5] is not None]
+            ax.plot(range(len(valores)), valores, marker='o', color='#1abc9c')
+            ax.set_title("Secuencia Producto Medio")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except ValueError:
+            QMessageBox.warning(self, "Entrada inválida", "Por favor, asegúrate de ingresar números enteros positivos.")
+
+# ------------------------- VISTA CUADRADO MEDIO -------------------------
+class VistaCuadradoMedio(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método del Cuadrado Medio")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_x0 = QLineEdit()
+        self.input_d = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_x0, self.input_d, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (X₀):", self.input_x0)
+        form.addRow("Dígitos centrales:", self.input_d)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(4)
+        self.tabla.setHorizontalHeaderLabels(["n", "Xₙ", "Xₙ²", "Medios"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            x = int(self.input_x0.text())
+            d = int(self.input_d.text())
+            n = int(self.input_n.text())
+
+            if any(val <= 0 for val in [x, d, n]):
+                raise ValueError("Todos los valores deben ser positivos.")
+
+            def obtener_medios(valor, digitos):
+                val_str = str(valor).zfill(digitos * 2)
+                start = (len(val_str) - digitos) // 2
+                return int(val_str[start:start + digitos]), val_str[start:start + digitos], val_str
+
+            resultados = []
+            for i in range(n):
+                cuadrado = x * x
+                xn_str = str(x).zfill(d)
+                medios_int, medios_str, cuadrado_str = obtener_medios(cuadrado, d)
+                resultados.append((i, xn_str, cuadrado_str, medios_str))
+                x = medios_int
+
+            # Mostrar en tabla
+            self.tabla.setRowCount(n)
+            for i, (idx, val, cuadrado, medio) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(idx)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(str(val)))
+                self.tabla.setItem(i, 2, QTableWidgetItem(str(cuadrado)))
+                self.tabla.setItem(i, 3, QTableWidgetItem(str(medio)))
+
+            # Graficar solo Xₙ
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            valores = [int(val) for _, val, _, _ in resultados]
+            ax.plot(range(n), valores, marker='o', color='#e74c3c')
+            ax.set_title("Secuencia Cuadrado Medio")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except ValueError:
+            QMessageBox.warning(self, "Entrada inválida", "Por favor, asegúrate de ingresar números enteros positivos.")
+
+# ------------------------- VISTA PCG -------------------------
+class VistaPCG(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método PCG (Permuted Congruential Generator)")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_x0 = QLineEdit()
+        self.input_a = QLineEdit()
+        self.input_c = QLineEdit()
+        self.input_m = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_x0, self.input_a, self.input_c, self.input_m, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero o expresión..")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (X₀):", self.input_x0)
+        form.addRow("Multiplicador (a):", self.input_a)
+        form.addRow("Constante (c):", self.input_c)
+        form.addRow("Módulo (m):", self.input_m)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(5)
+        self.tabla.setHorizontalHeaderLabels(["n", "Xₙ", "a·Xₙ + c", "mod m", "Xₙ₊₁"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            x = int(self.input_x0.text())
+            a = int(self.input_a.text())
+            c = int(self.input_c.text())
+            m = eval(self.input_m.text(), {"__builtins__": {}})  # 🧠 Evalúa expresiones como 2**32
+            n = int(self.input_n.text())
+
+            if any(val <= 0 for val in [x, a, c, m, n]):
+                raise ValueError("Todos los valores deben ser positivos.")
+
+            resultados = []
+
+            for i in range(n):
+                operacion = a * x + c
+                x_next = operacion % m
+                resultados.append((i, x, operacion, f"{operacion} % {m}", x_next))
+                x = x_next
+
+            self.tabla.setRowCount(len(resultados))
+            for i, fila in enumerate(resultados):
+                for j, valor in enumerate(fila):
+                    self.tabla.setItem(i, j, QTableWidgetItem(str(valor)))
+
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            valores = [fila[4] for fila in resultados]
+            ax.plot(range(len(valores)), valores, marker='o', color='#2980b9')
+            ax.set_title("Secuencia PCG")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Entrada inválida", f"Error: {e}")
+
+# ------------------------- VISTA TAUSWORTHE -------------------------
+class VistaTausworthe(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método Tausworthe (LFSR)")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_semilla = QLineEdit()
+        self.input_tap1 = QLineEdit()
+        self.input_tap2 = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_semilla, self.input_tap1, self.input_tap2, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (entero):", self.input_semilla)
+        form.addRow("Tap 1 (posición A):", self.input_tap1)
+        form.addRow("Tap 2 (posición B):", self.input_tap2)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(3)
+        self.tabla.setHorizontalHeaderLabels(["n", "Registro", "Bit generado"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            semilla = int(self.input_semilla.text())
+            tap1 = int(self.input_tap1.text())
+            tap2 = int(self.input_tap2.text())
+            n = int(self.input_n.text())
+
+            binario = list(bin(semilla)[2:])
+            if len(binario) <= max(tap1, tap2):
+                raise ValueError("La semilla debe tener más bits que las posiciones tap.")
+
+            registro = binario.copy()
+            resultados = []
+
+            for i in range(n):
+                b1 = int(registro[-(tap1+1)])
+                b2 = int(registro[-(tap2+1)])
+                nuevo_bit = b1 ^ b2
+                resultados.append((i, ''.join(registro), nuevo_bit))
+                registro = registro[1:] + [str(nuevo_bit)]
+
+            self.tabla.setRowCount(n)
+            for i, (idx, reg, bit) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(idx)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(reg))
+                self.tabla.setItem(i, 2, QTableWidgetItem(str(bit)))
+
+            # Gráfica
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            bits = [bit for _, _, bit in resultados]
+            ax.plot(range(n), bits, marker='o', color='#8e44ad')
+            ax.set_title("Bits generados - Tausworthe")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Bit")
+            ax.set_yticks([0, 1])
+            ax.grid(True)
+            self.canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Entrada inválida: {e}")
+
+# ------------------------- VISTA WELL -------------------------
+class VistaWELL(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método WELL (Simplificado)")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_semilla = QLineEdit()
+        self.input_n = QLineEdit()
+
+        for campo in [self.input_semilla, self.input_n]:
+            campo.setPlaceholderText("Ingrese un número entero...")
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (X₀):", self.input_semilla)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(3)
+        self.tabla.setHorizontalHeaderLabels(["n", "Estado", "Xₙ"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            semilla = int(self.input_semilla.text())
+            cantidad = int(self.input_n.text())
+
+            if semilla <= 0 or cantidad <= 0:
+                raise ValueError("Los valores deben ser positivos")
+
+            # Inicializar estado con valores pseudoaleatorios
+            estado = [random.getrandbits(32) for _ in range(16)]
+            estado[0] = semilla
+            resultados = []
+
+            for i in range(cantidad):
+                z0 = estado[-1]
+                z1 = estado[0] ^ (estado[0] << 16) ^ (estado[1] << 15)
+                z2 = estado[2] ^ (estado[2] >> 11)
+                nuevo = z1 ^ z2 ^ z0
+                nuevo &= 0xFFFFFFFF  # Asegura 32 bits
+                resultados.append((i, estado.copy(), nuevo))
+                estado = estado[1:] + [nuevo]
+
+            self.tabla.setRowCount(len(resultados))
+            for i, (idx, est, val) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(idx)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(", ".join(map(str, est))))
+                self.tabla.setItem(i, 2, QTableWidgetItem(str(val)))
+
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            ax.plot([i for i, _, _ in resultados], [val for _, _, val in resultados], marker='o', color='#e67e22')
+            ax.set_title("Secuencia WELL")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Xₙ")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Entrada inválida: {e}")
+
+# ------------------------- VISTA MERSENNE TWISTER -------------------------
+class VistaMersenneTwister(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Título
+        titulo = QLabel("Método Mersenne Twister (random.random)")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout.addWidget(titulo)
+
+        # Formulario
+        form = QFormLayout()
+        self.input_semilla = QLineEdit()
+        self.input_n = QLineEdit()
+
+        self.input_semilla.setPlaceholderText("Opcional - Entero para fijar la semilla")
+        self.input_n.setPlaceholderText("Ingrese la cantidad de números a generar")
+
+        for campo in [self.input_semilla, self.input_n]:
+            campo.setStyleSheet("""
+                background-color: white; padding: 6px; font-size: 14px;
+                border: 1px solid #ccc; border-radius: 4px;
+            """)
+
+        form.addRow("Semilla (opcional):", self.input_semilla)
+        form.addRow("Cantidad a generar:", self.input_n)
+        layout.addLayout(form)
+
+        # Botón calcular
+        btn_calcular = QPushButton("Generar")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular)
+        layout.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(2)
+        self.tabla.setHorizontalHeaderLabels(["n", "Valor (0 - 1)"])
+        self.tabla.setMinimumHeight(300)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabla)
+
+        # Gráfica
+        self.canvas = FigureCanvas(plt.Figure(figsize=(8, 4)))
+        self.canvas.setMinimumHeight(300)
+        layout.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+        scroll.setWidget(contenedor)
+        principal = QVBoxLayout(self)
+        principal.addWidget(scroll)
+
+    def calcular(self):
+        try:
+            semilla_texto = self.input_semilla.text().strip()
+            n = int(self.input_n.text())
+            if n <= 0:
+                raise ValueError("La cantidad debe ser mayor a cero")
+
+            if semilla_texto:
+                semilla = int(semilla_texto)
+                random.seed(semilla)
+            else:
+                random.seed()
+
+            resultados = [(i, random.random()) for i in range(n)]
+
+            self.tabla.setRowCount(n)
+            for i, (idx, val) in enumerate(resultados):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(idx)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(f"{val:.8f}"))
+
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            ax.plot([i for i, _ in resultados], [v for _, v in resultados], marker='o', color='#3498db')
+            ax.set_title("Valores generados - Mersenne Twister")
+            ax.set_xlabel("n")
+            ax.set_ylabel("Valor")
+            ax.grid(True)
+            self.canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Entrada inválida: {e}")
+
+# ------------------------- SUBMENU MONTECARLO -------------------------
+class SubmenuMontecarlo(SubmenuBase):
+    def __init__(self, stack, menu_widget, callbacks):
+        super().__init__(stack, menu_widget)
+        self.callbacks = callbacks  # Diccionario de {nombre: función}
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+
+        title = QLabel("Simulación por Montecarlo")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(20)
+        grid.setAlignment(Qt.AlignCenter)
+
+        # Opciones disponibles
+        operaciones = [
+            ("Distribuciones", "distribucion.png"),
+            ("Integración", "integral.png"),
+        ]
+
+        for idx, (nombre, icono_archivo) in enumerate(operaciones):
+            btn = QToolButton()
+            btn.setText(nombre)
+            btn.setIcon(QIcon(obtener_ruta_recurso(os.path.join("imagenes", icono_archivo))))
+            btn.setIconSize(QSize(40, 40))
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setStyleSheet("""
+                QToolButton {
+                    background-color: #2c3e50;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                    border-radius: 10px;
+                    padding: 15px;
+                }
+                QToolButton:hover {
+                    background-color: #34495e;
+                }
+            """)
+
+            if nombre in self.callbacks:
+                btn.clicked.connect(self.callbacks[nombre])
+            else:
+                btn.clicked.connect(lambda _, x=nombre: QMessageBox.information(self, "Montecarlo", f"'{x}' aún no está disponible"))
+
+            grid.addWidget(btn, idx // 3, idx % 3)
+
+        layout.addLayout(grid)
+        layout.addSpacing(1)
+        self.add_back_button(layout)
+
+# ------------------------- VISTA DISTRIBUCIONES MONTECARLO -------------------------
+class VistaDistribucionesMontecarlo(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        contenedor = QWidget()
+        layout_scroll = QVBoxLayout(contenedor)
+        scroll.setWidget(contenedor)
+        layout_principal = QVBoxLayout(self)
+        layout_principal.addWidget(scroll)
+
+        # Título
+        titulo = QLabel("🎲 Simulación Montecarlo")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 26px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout_scroll.addWidget(titulo)
+
+        # Selector de distribución
+        self.combo_distribucion = QComboBox()
+        self.combo_distribucion.addItems(["Normal", "Poisson", "Uniforme", "Binomial", "Exponencial"])
+        self.combo_distribucion.currentIndexChanged.connect(self.actualizar_formulario)
+        layout_scroll.addWidget(self.combo_distribucion)
+
+        # Formulario dinámico
+        self.form = QFormLayout()
+        self.inputs = {}
+        self.estilo_input = """
+            QLineEdit {
+                background-color: white; padding: 6px;
+                font-size: 14px; border: 1px solid #ccc; border-radius: 5px;
+            }
+        """
+        layout_scroll.addLayout(self.form)
+        self.actualizar_formulario()  # Inicializa con campos de 'Normal'
+
+        # Botón generar
+        btn_generar = QPushButton("Simular")
+        btn_generar.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9; color: white;
+                font-size: 14px; padding: 10px 14px; border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #3498db;
+            }
+        """)
+        btn_generar.clicked.connect(self.simular)
+        layout_scroll.addWidget(btn_generar, alignment=Qt.AlignCenter)
+
+        # Tabla de resultados (sin scroll interno)
+        self.tabla = QTableWidget(5, 2)
+        self.tabla.setFixedHeight(170)
+        self.tabla.setHorizontalHeaderLabels(["Estadística", "Valor"])
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout_scroll.addWidget(self.tabla)
+
+        # Gráfico
+        self.canvas = FigureCanvas(plt.Figure(figsize=(6, 4)))
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.canvas.setMinimumHeight(350)
+        layout_scroll.addWidget(self.canvas)
+
+        # Botón volver
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout_scroll.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+    def actualizar_formulario(self):
+        while self.form.rowCount():
+            self.form.removeRow(0)
+        self.inputs.clear()
+
+        dist = self.combo_distribucion.currentText()
+
+        if dist == "Normal":
+            campos = [
+                ("Media (μ):", "media"),
+                ("Desviación estándar (σ):", "desviacion"),
+                ("Cantidad de muestras:", "cantidad"),
+            ]
+        elif dist == "Poisson":
+            campos = [
+                ("Lambda (λ):", "lambda"),
+                ("Cantidad de muestras:", "cantidad"),
+            ]
+        elif dist == "Uniforme":
+            campos = [
+                ("Mínimo (a):", "a"),
+                ("Máximo (b):", "b"),
+                ("Cantidad de muestras:", "cantidad"),
+            ]
+        elif dist == "Binomial":
+            campos = [
+                ("Número de ensayos (n):", "ensayos"),
+                ("Probabilidad de éxito (p):", "probabilidad"),
+                ("Cantidad de muestras:", "cantidad"),
+            ]
+        elif dist == "Exponencial":
+            campos = [
+                ("Lambda (λ):", "lambda"),
+                ("Cantidad de muestras:", "cantidad"),
+            ]
+        else:
+            campos = []
+
+        for label, key in campos:
+            entrada = QLineEdit()
+            entrada.setStyleSheet(self.estilo_input)
+            entrada.setPlaceholderText("Ingrese un valor...")
+            self.form.addRow(label, entrada)
+            self.inputs[key] = entrada
+
+
+    def simular(self):
+        try:
+            dist = self.combo_distribucion.currentText()
+            plot_extra = None
+
+            if dist == "Normal":
+                mu = float(self.inputs["media"].text())
+                sigma = float(self.inputs["desviacion"].text())
+                n = int(self.inputs["cantidad"].text())
+                datos = np.random.normal(mu, sigma, n)
+                titulo = "Distribución Normal Simulada"
+                xlabel = "Valor"
+                ylabel = "Densidad"
+                plot_extra = lambda ax: self._plot_normal_curve(ax, mu, sigma)
+
+            elif dist == "Poisson":
+                lam = float(self.inputs["lambda"].text())
+                n = int(self.inputs["cantidad"].text())
+                datos = np.random.poisson(lam, n)
+                titulo = "Distribución Poisson Simulada"
+                xlabel = "Número de eventos"
+                ylabel = "Frecuencia"
+
+            elif dist == "Uniforme":
+                a = float(self.inputs["a"].text())
+                b = float(self.inputs["b"].text())
+                n = int(self.inputs["cantidad"].text())
+                datos = np.random.uniform(a, b, n)
+                titulo = "Distribución Uniforme Simulada"
+                xlabel = "Valor"
+                ylabel = "Densidad"
+
+            elif dist == "Binomial":
+                ensayos = int(self.inputs["ensayos"].text())
+                p = float(self.inputs["probabilidad"].text())
+                n = int(self.inputs["cantidad"].text())
+                datos = np.random.binomial(ensayos, p, n)
+                titulo = "Distribución Binomial Simulada"
+                xlabel = "Éxitos"
+                ylabel = "Frecuencia"
+
+            elif dist == "Exponencial":
+                lam = float(self.inputs["lambda"].text())
+                n = int(self.inputs["cantidad"].text())
+                datos = np.random.exponential(1 / lam, n)
+                titulo = "Distribución Exponencial Simulada"
+                xlabel = "Tiempo"
+                ylabel = "Densidad"
+
+            else:
+                return
+
+            # Estadísticas
+            estad = [
+                ("Media", np.mean(datos)),
+                ("Mediana", np.median(datos)),
+                ("Desviación", np.std(datos)),
+                ("Mínimo", np.min(datos)),
+                ("Máximo", np.max(datos))
+            ]
+            self.tabla.setRowCount(len(estad))
+            for i, (nombre, valor) in enumerate(estad):
+                self.tabla.setItem(i, 0, QTableWidgetItem(nombre))
+                self.tabla.setItem(i, 1, QTableWidgetItem(f"{valor:.4f}"))
+
+            # Graficar
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            ax.hist(datos, bins=30, density=(dist in ["Normal", "Exponencial", "Uniforme"]), alpha=0.6, color="#3498db")
+            if plot_extra:
+                plot_extra(ax)
+            ax.set_title(titulo)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            ax.grid(True)
+            self.canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Verifica los datos ingresados. Detalles: {e}")
+
+
+    def _plot_normal_curve(self, ax, mu, sigma):
+        xmin, xmax = ax.get_xlim()
+        x = np.linspace(xmin, xmax, 100)
+        y = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(- (x - mu) ** 2 / (2 * sigma ** 2))
+        ax.plot(x, y, color="red", linewidth=2, label="Curva Normal")
+        ax.legend()
+
+#-------------------------- VISTA INTEGRACION MONTECARLO -------------------------
+class VistaIntegracionMontecarlo(QWidget):
+    def __init__(self, volver_callback):
+        super().__init__()
+        self.volver_callback = volver_callback
+        self.setStyleSheet("background-color: #f0f3f4; font-family: Arial;")
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        contenedor = QWidget()
+        layout_scroll = QVBoxLayout(contenedor)
+        scroll.setWidget(contenedor)
+        layout_principal = QVBoxLayout(self)
+        layout_principal.addWidget(scroll)
+
+        titulo = QLabel("\u222b Integración por Montecarlo")
+        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet("font-size: 26px; font-weight: bold; color: #2c3e50; margin-bottom: 15px;")
+        layout_scroll.addWidget(titulo)
+
+        self.combo_metodo = QComboBox()
+        self.combo_metodo.addItems(["Promedio (clásico)", "Estimación geométrica"])
+        self.combo_metodo.currentIndexChanged.connect(self.actualizar_formulario)
+        layout_scroll.addWidget(self.combo_metodo)
+
+        self.form = QFormLayout()
+        self.inputs = {}
+        self.estilo_input = """
+            QLineEdit {
+                background-color: white; padding: 6px;
+                font-size: 14px; border: 1px solid #ccc; border-radius: 5px;
+            }
+        """
+        layout_scroll.addLayout(self.form)
+        self.actualizar_formulario()
+
+        btn_calcular = QPushButton("Calcular")
+        btn_calcular.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                font-size: 14px; padding: 10px 14px; border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_calcular.clicked.connect(self.calcular_integral)
+        layout_scroll.addWidget(btn_calcular, alignment=Qt.AlignCenter)
+
+        self.resultado_label = QLabel("Resultado aproximado: -")
+        self.resultado_label.setAlignment(Qt.AlignCenter)
+        self.resultado_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
+        layout_scroll.addWidget(self.resultado_label)
+
+        self.tabla = QTableWidget(5, 2)
+        self.tabla.setFixedHeight(170)
+        self.tabla.setHorizontalHeaderLabels(["Estadística", "Valor"])
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                font-size: 14px;
+                border: 1px solid #ccc;
+            }
+            QHeaderView::section {
+                background-color: #2c3e50;
+                color: white;
+                padding: 4px;
+                font-weight: bold;
+            }
+        """)
+        layout_scroll.addWidget(self.tabla)
+
+        self.canvas = FigureCanvas(plt.Figure(figsize=(6, 4)))
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.canvas.setMinimumHeight(350)
+        layout_scroll.addWidget(self.canvas)
+
+        btn_volver = QPushButton("Volver")
+        btn_volver.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d; color: white;
+                font-size: 13px; padding: 8px 20px; border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+        """)
+        btn_volver.clicked.connect(self.volver_callback)
+        layout_scroll.addWidget(btn_volver, alignment=Qt.AlignCenter)
+
+    def actualizar_formulario(self):
+        while self.form.rowCount():
+            self.form.removeRow(0)
+        self.inputs.clear()
+
+        metodo = self.combo_metodo.currentText()
+        campos = [
+            ("Función f(x):", "funcion"),
+            ("Límite inferior a:", "a"),
+            ("Límite superior b:", "b"),
+            ("Número de muestras:", "n"),
+        ]
+
+        if metodo == "Estimación geométrica":
+            campos.append(("Altura máxima f(x):", "altura"))
+
+        for label, key in campos:
+            entrada = QLineEdit()
+            entrada.setStyleSheet(self.estilo_input)
+            entrada.setPlaceholderText("Ingrese un valor...")
+            self.form.addRow(label, entrada)
+            self.inputs[key] = entrada
+
+    def calcular_integral(self):
+        try:
+            metodo = self.combo_metodo.currentText()
+            f_str = self.inputs["funcion"].text()
+            a = float(self.inputs["a"].text())
+            b = float(self.inputs["b"].text())
+            n = int(self.inputs["n"].text())
+
+            x = np.random.uniform(a, b, n)
+            f = lambda x: eval(f_str, {"x": x, "np": np, "sin": np.sin, "cos": np.cos, "exp": np.exp})
+
+            if metodo == "Promedio (clásico)":
+                y = f(x)
+                resultado = (b - a) * np.mean(y)
+                detalle = "Promedio clásico"
+            else:
+                f_max = float(self.inputs["altura"].text())
+                y_rand = np.random.uniform(0, f_max, n)
+                y_real = f(x)
+                debajo = y_rand <= y_real
+                resultado = (b - a) * f_max * (np.sum(debajo) / n)
+                y = y_real
+                detalle = "Estimación geométrica"
+
+            self.resultado_label.setText(f"Resultado aproximado: {resultado:.6f}")
+
+            estad = [
+                ("Método", detalle),
+                ("Media f(x)", np.mean(y)),
+                ("Desviación", np.std(y)),
+                ("Mínimo", np.min(y)),
+                ("Máximo", np.max(y))
+            ]
+            self.tabla.setRowCount(len(estad))
+            for i, (nombre, valor) in enumerate(estad):
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(nombre)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(f"{valor:.4f}" if isinstance(valor, float) else valor))
+
+            self.canvas.figure.clear()
+            ax = self.canvas.figure.add_subplot(111)
+            X = np.linspace(a, b, 500)
+            Y = f(X)
+            ax.plot(X, Y, label="f(x)", color="#2c3e50")
+            if metodo == "Estimación geométrica":
+                ax.scatter(x, y_rand, color=["green" if d else "red" for d in debajo], alpha=0.4, s=10)
+            else:
+                ax.scatter(x, y, alpha=0.3, color="#3498db", s=10)
+            ax.set_title("Aproximación por Montecarlo")
+            ax.set_xlabel("x")
+            ax.set_ylabel("f(x)")
+            ax.grid(True)
+            ax.legend()
+            self.canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Verifica los datos ingresados. Detalles: {e}")
+
 # ------------------------- MÉTODO PARA VISTA PRINCIPAL -------------------------
 class MenuPrincipal(QWidget):
     def __init__(self):
@@ -3876,15 +5671,62 @@ class MenuPrincipal(QWidget):
         self.vista_acercade = AcercaDe(self.stack, self.menu_widget)
         self.stack.addWidget(self.vista_acercade)
 
-        self.vista_vectores_propios = VistaVectoresPropios(self.volver_a_algebra)
-
-        self.stack.addWidget(self.vista_vectores_propios)
-
         # Crear la vista
         self.vista_metodos = VistaMetodosNumericos(volver_callback=lambda: self.stack.setCurrentWidget(self.menu_widget))
         self.stack.setCurrentWidget(self.menu_widget)
 
         self.stack.addWidget(self.vista_metodos)
+
+# ========== VISTA DE VALORES Y VECTORES PROPIOS ==========
+        self.vista_vectores_propios = VistaVectoresPropios(self.volver_a_algebra)
+        self.stack.addWidget(self.vista_vectores_propios)
+
+        
+# ========== VISTA DE GENERACIÓN DE NÚMEROS ==========
+        self.vista_congruencial_mixto = VistaCongruencialMixto(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_congruencial_mixto)
+        self.vista_xorshift = VistaXorshift(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_xorshift)
+        self.vista_congruencial_multiplicativo = VistaCongruencialMultiplicativo(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_congruencial_multiplicativo)
+        self.vista_producto_medio = VistaProductoMedio(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_producto_medio)
+        self.vista_cuadrado_medio = VistaCuadradoMedio(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_cuadrado_medio)
+        self.vista_pcg = VistaPCG(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_pcg)
+        self.vista_tausworthe = VistaTausworthe(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_tausworthe)
+        self.vista_well = VistaWELL(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_well)
+        self.vista_mersenne = VistaMersenneTwister(self.volver_a_generacion)
+        self.stack.addWidget(self.vista_mersenne)
+
+        self.submenu_generacion = SubmenuGeneracionNumeros(
+            self.stack,
+            self.menu_widget,
+            {
+                "Congruencial Mixto": self.ir_a_congruencial_mixto,
+                "Xorshift": self.ir_a_xorshift,
+                "Congruencial Multiplicativo": self.ir_a_congruencial_multiplicativo,
+                "Producto Medio": self.ir_a_producto_medio,
+                "Cuadrado Medio": self.ir_a_cuadrado_medio,
+                "PCG": self.ir_a_pcg,
+                "Tausworthe LFSR": self.ir_a_tausworthe,
+                "WELL": self.ir_a_well,
+                "Mersenne Twister": self.ir_a_mersenne,
+            }
+        )
+        self.stack.addWidget(self.submenu_generacion)
+
+        self.vista_distribuciones_montecarlo = VistaDistribucionesMontecarlo(self.volver_a_montecarlo)
+        self.vista_integracion_montecarlo = VistaIntegracionMontecarlo(self.volver_a_montecarlo)
+        self.stack.addWidget(self.vista_distribuciones_montecarlo)
+        self.stack.addWidget(self.vista_integracion_montecarlo)
+
+
+
+
 
         # ========== SUBMENÚS ==========
         self.submenu_matrices = SubmenuMatrices(
@@ -3946,6 +5788,16 @@ class MenuPrincipal(QWidget):
 
         self.stack.addWidget(self.submenu_algebra)
 
+        self.submenu_montecarlo = SubmenuMontecarlo(
+            self.stack,
+            self.menu_widget,
+            {
+                "Distribuciones": self.ir_a_distribuciones_montecarlo,
+                "Integración": self.ir_a_integracion_montecarlo,
+            }
+        )
+        self.stack.addWidget(self.submenu_montecarlo)
+
 
         # Inicializa el menú principal
         self.init_menu()
@@ -3971,7 +5823,11 @@ class MenuPrincipal(QWidget):
             ("Cálculo", obtener_ruta_recurso(os.path.join("imagenes", "calculo.png"))),
             ("AcercaDe", obtener_ruta_recurso(os.path.join("imagenes", "acercade.png"))),
             ("Métodos \nNuméricos", obtener_ruta_recurso(os.path.join("imagenes", "cruzado.png"))),
-            ("Álgebra \nLineal", obtener_ruta_recurso(os.path.join("imagenes", "punto.png"))),
+            ("valores y \nvectores propios", obtener_ruta_recurso(os.path.join("imagenes", "punto.png"))),
+            ("Generación de \nNúmeros", obtener_ruta_recurso(os.path.join("imagenes", "parametrica.png"))),
+            ("Montecarlo", obtener_ruta_recurso(os.path.join("imagenes", "montecarlo.png"))),
+
+
 
         ]
 
@@ -4002,9 +5858,15 @@ class MenuPrincipal(QWidget):
                 btn.clicked.connect(lambda _, x=self.vista_metodos: self.stack.setCurrentWidget(x))
             elif name == "AcercaDe":
                 btn.clicked.connect(lambda _, x=self.vista_acercade: self.stack.setCurrentWidget(x))
-            elif name == "Álgebra \nLineal":
+            elif name == "valores y \nvectores propios":
                 btn.clicked.connect(lambda _, x=self.submenu_algebra: self.stack.setCurrentWidget(x))
+            elif name == "Generación de \nNúmeros":
+                btn.clicked.connect(lambda _, x=self.submenu_generacion: self.stack.setCurrentWidget(x))
+            elif name == "Montecarlo":
+                btn.clicked.connect(lambda _, x=self.submenu_montecarlo: self.stack.setCurrentWidget(x))
+
             grid.addWidget(btn, i // 3, i % 3)
+
 
         layout.addLayout(grid)
         self.stack.setCurrentWidget(self.menu_widget)  # Mostrar el menú al iniciar
@@ -4049,6 +5911,27 @@ class MenuPrincipal(QWidget):
 
     def ir_a_vectores_propios(self): self.stack.setCurrentWidget(self.vista_vectores_propios)
     def volver_a_algebra(self): self.stack.setCurrentWidget(self.submenu_algebra)
+
+    def ir_a_congruencial_mixto(self): self.stack.setCurrentWidget(self.vista_congruencial_mixto)
+    def ir_a_xorshift(self): self.stack.setCurrentWidget(self.vista_xorshift)
+    def ir_a_congruencial_multiplicativo(self): self.stack.setCurrentWidget(self.
+    vista_congruencial_multiplicativo)
+    def ir_a_producto_medio(self): self.stack.setCurrentWidget(self.vista_producto_medio)
+    def ir_a_cuadrado_medio(self): self.stack.setCurrentWidget(self.vista_cuadrado_medio)
+    def ir_a_pcg(self): self.stack.setCurrentWidget(self.vista_pcg)
+    def ir_a_tausworthe(self): self.stack.setCurrentWidget(self.vista_tausworthe)
+    def ir_a_well(self): self.stack.setCurrentWidget(self.vista_well)
+    def ir_a_mersenne(self): self.stack.setCurrentWidget(self.vista_mersenne)
+    def volver_a_generacion(self): self.stack.setCurrentWidget(self.submenu_generacion)
+
+    def ir_a_distribuciones_montecarlo(self):
+        self.stack.setCurrentWidget(self.vista_distribuciones_montecarlo)
+
+    def ir_a_integracion_montecarlo(self):
+        self.stack.setCurrentWidget(self.vista_integracion_montecarlo)
+
+    def volver_a_montecarlo(self):
+        self.stack.setCurrentWidget(self.submenu_montecarlo)
 
 # ------------------------- EJECUCIÓN -------------------------
 if __name__ == "__main__":  # Verifica si el script es ejecutado directamente (no importado como módulo)
